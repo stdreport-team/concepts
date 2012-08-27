@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.itextpdf.text.Chunk;
+import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
@@ -48,19 +49,35 @@ public class TextBlock {
 		c_elems.add(e);
 	}
 
-	public void draw(PdfWriter w) throws DocumentException {
+	private ColumnText c_columnText;
+	public boolean draw(PdfWriter w, Document d) throws DocumentException {
 		PdfContentByte cb = w.getDirectContent();
-		ColumnText column = new ColumnText(cb);
+		c_columnText = new ColumnText(cb);
 		for (int i = 0; i < c_elems.size(); i++) {
 			Element e = c_elems.get(i);
 			if (e instanceof Phrase)
-				((Phrase)e).setFont(c_font);
-			column.addElement(e);
+				((Phrase) e).setFont(c_font);
+			c_columnText.addElement(e);
 		}
-		column.setLeading(c_font.getSize() * 1.5f);
-		drawText(column);
+		c_columnText.setLeading(c_font.getSize() * 1.5f);
+		c_linesWritten = 0;
+		c_realWidth = 0;
+		c_realHeight = 0;
+		if (getGrowType() == GrowDirection.HORIZ
+				|| getGrowType() == GrowDirection.BOTH) {
+			// in case of horizontal auto-width, adjust the width to contain the
+			// largest text line
+			float maxWidth = getMaxWidth();
+			if (c_width < maxWidth)
+				c_width = maxWidth;
+		}
+		return drawText(c_columnText, d, c_llx, c_lly, c_height);
 	}
 
+	public boolean redraw(PdfWriter w, Document d) throws DocumentException {
+		return drawText(c_columnText, d, c_llx, d.top()  - c_columnText.getLeading(), c_columnText.getLeading());		
+	}
+	
 	private float getPhraseWidth(Phrase p) {
 		return getStringWidth(p.getContent(), p.getFont());
 	}
@@ -104,22 +121,12 @@ public class TextBlock {
 		return maxWidth;
 	}
 
-	private void drawText(ColumnText c) throws DocumentException {
-		c_linesWritten = 0;
-		c_realWidth = 0;
-		c_realHeight = 0;
-		if (getGrowType() == GrowDirection.HORIZ
-				|| getGrowType() == GrowDirection.BOTH) {
-			// in case of horizontal auto-width, adjust the width to contain the
-			// largest text line
-			float maxWidth = getMaxWidth();
-			if (c_width < maxWidth)
-				c_width = maxWidth;
-		}
-		float x1 = c_llx;
-		float y1 = c_lly;
-		float x2 = c_llx + c_width;
-		float y2 = c_lly + c_height;
+	
+	
+	private boolean drawText(ColumnText c, Document d, float x1, float y1, float height) throws DocumentException {
+		boolean endText = true;
+		float x2 = x1 + c_width; // upper-right x
+		float y2 = y1 + height; // upper-right y
 		int status = ColumnText.START_COLUMN;
 		while (ColumnText.hasMoreText(status)) {
 			c.setSimpleColumn(x1, y1, x2, y2);
@@ -127,38 +134,52 @@ public class TextBlock {
 			status = c.go();
 			c_linesWritten += c.getLinesWritten();
 			c_realWidth = Math.max(c_realWidth, c.getFilledWidth());
-			c_realHeight += c.getLinesWritten() * c.getLeading();   // c_lly + c_height  - c.getYLine();				
+			c_realHeight += c.getLinesWritten() * c.getLeading(); 
 			float fw = c.getFilledWidth();
 			if (fw > c_width)
 				System.out
-						.println("WARNING: some text can be cutted out the text block ("
-								+ (fw - c_width) + "pt)");
+						.println("WARNING: some text can be cutted out from the text block ("
+								+ (fw - c_width) + "pt cutted)");
 
 			if (getGrowType() == GrowDirection.NONE) {
-					break; 
-			} else if ((getGrowType() == GrowDirection.VERT
-					|| getGrowType() == GrowDirection.BOTH)
+				break;
+			} else if ((getGrowType() == GrowDirection.VERT || getGrowType() == GrowDirection.BOTH)
 					&& ColumnText.hasMoreText(status)) {
 				// need to extend vertically: adjust "y" of lower left and upper
 				// right points
-				float dist = c.getLinesWritten() * c.getLeading() - c_height;
-				y1 -= c_height + dist;
+				// dist=space to skip after last written line
+				float dist = c.getLinesWritten() * c.getLeading() - height;
+				y1 -= height + dist;
 				if (y1 < 0)
 					y1 = 0;
-				y2 -= c_height + dist;
+				y2 -= height + dist;
 				if (y2 < 0)
 					y2 = 0;
 			}
-			
+			if (y2 < d.bottomMargin()) {
+				endText = false;
+				break;
+			}
+			if (y1 < d.bottomMargin()) {
+				y1 = d.bottomMargin();
+			}
 		}
 		y1 = c.getYLine() - c_padding + c.getDescender();
-		y2 = c_lly + c_height + c_padding;
+		y2 = y1 + height + c_padding;
 		c_realHeight = y2 - y1;
 
+		drawBorder(c, x1, y1, y2);
+		return endText;
+	}
+
+	
+	
+	
+	private void drawBorder(ColumnText c, float x1, float y1, float y2) {
 		PdfContentByte cb = c.getCanvas();
 		if (c_borderSize > 0) {
 			x1 -= c_padding;
-			x2 = x1 + c_width + c_padding * 2;
+			float x2 = x1 + c_width + c_padding * 2;
 			cb.setLineWidth(c_borderSize);
 			cb.setRGBColorStrokeF(0.3f, 0.17f, 0.5f);
 			c.getCanvas().moveTo(x1, y1); // ll
@@ -167,20 +188,26 @@ public class TextBlock {
 			c.getCanvas().lineTo(x2, y1); // lr
 			c.getCanvas().closePath();
 			c.getCanvas().stroke();
-			c_realHeight += c_borderSize*2;
-		}
+			c_realHeight += c_borderSize * 2;
+		}		
 	}
-
+	
 	private float getLastlineExtraspace(ColumnText c) {
 		if (c.getCompositeElements().size() > 0) {
-			Element e = c.getCompositeElements().get(c.getCompositeElements().size() - 1);
+			Element e = c.getCompositeElements().get(
+					c.getCompositeElements().size() - 1);
 			if (e instanceof Phrase) {
-				return ((Phrase) e).getLeading() - ((Phrase) e).getFont().getSize();
+				return ((Phrase) e).getLeading()
+						- ((Phrase) e).getFont().getSize();
 			}
 		}
 		return c.getLeading() - c_font.getSize();
 	}
-	
+
+	/**
+	 * Return the lines written in the box so far. 
+	 * @return number of the lines written so far
+	 */
 	public int getLinesWritten() {
 		return c_linesWritten;
 	}
@@ -192,7 +219,7 @@ public class TextBlock {
 	public float getRealHeight() {
 		return c_realHeight;
 	}
-	
+
 	public float getLlx() {
 		return c_llx;
 	}

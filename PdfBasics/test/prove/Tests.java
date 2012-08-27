@@ -133,20 +133,20 @@ public class Tests {
 					"Chi è causa del suo mal, pianga se stesso."));
 			col2.addElement(new Phrase(
 					"Il mondo è fatto a scale, c'è chi scende e c'è chi sale."));
-			draw(col2, pdf.writer);
+			draw(col2, pdf.writer, doc);
 			
 			drawGridX(doc, pdf.writer, col2.getLly() + col2.getHeight(), 20);
 
 			col2.setLly(doc.top(30) - 480);			
 			col2.setFont(times20);
-			draw(col2, pdf.writer);
+			draw(col2, pdf.writer, doc);
 			
 			doc.newPage();
 			
 			col2.setGrowType(GrowDirection.NONE);
 			col2.setLly(doc.top(30) - 400);
 
-			draw(col2, pdf.writer);
+			draw(col2, pdf.writer, doc);
 //			
 //			
 //			TextBlock tb = new TextBlock(doc.left(30), doc.top(30) - 200, 200, 150);
@@ -176,6 +176,47 @@ public class Tests {
 			Assert.fail(e.toString());
 		}
 	}
+
+	@Test
+	public void testColumnTextOnTwoPages() {
+		try {
+			Font times20 = new Font(FontFamily.TIMES_ROMAN, 20);
+			Font helv18 = new Font(FontFamily.HELVETICA, 18);
+			Font helv11 = new Font(FontFamily.HELVETICA, 11);
+			helv11.setColor(BaseColor.BLUE);
+			
+			PdfData pdf = createPdfDocument("provaColumntextPages");
+			Document doc = pdf.document;
+			
+			TextBlock block = new TextBlock(doc.left(30), doc.bottomMargin() + 50, 200, 100);
+			block.setBorderSize(0.8f);
+			block.setFont(helv18);
+			block.setPadding(2);
+			block.setGrowType(GrowDirection.BOTH);
+			block.addElement(new Phrase(
+					"Tanto va la gatta al lardo\n che ci lascia lo zampino."));
+			block.addElement(new Phrase("L'ultimo che esce chiude la porta"));
+			block.addElement(new Phrase(
+					"Meglio un uovo oggi che una gallina domani."));
+			block.addElement(new Phrase("Chi trova un amico trova un tesoro."));
+			Phrase p = new Phrase("Chi va con lo zoppo");
+			Chunk c = new Chunk(" impara a zoppicare.", helv11);
+			c.setHorizontalScaling(3.5f);
+			p.add(c);
+			block.addElement(p);
+			block.addElement(new Phrase("A caval donato non si guarda in bocca."));
+			block.addElement(new Phrase(
+					"Chi è causa del suo mal, pianga se stesso."));
+			block.addElement(new Phrase(
+					"Il mondo è fatto a scale, c'è chi scende e c'è chi sale."));
+			draw(block, pdf.writer, doc);
+			
+			//drawGridX(doc, pdf.writer, block.getLly() + block.getHeight(), 20);
+			doc.close();
+		} catch (Exception e) {
+			Assert.fail(e.toString());
+		}
+	}
 	
 	private void drawGridX(Document doc, PdfWriter w, float startTop, float step) {
 		PdfContentByte cb = w.getDirectContentUnder();
@@ -189,9 +230,26 @@ public class Tests {
 			y -= step;
 		}
 	}
+
+	private void drawMargins(Document doc, PdfWriter w) {
+		PdfContentByte cb = w.getDirectContentUnder();
+		cb.setLineWidth(0.4f);
+		cb.setRGBColorStrokeF(0.7f, 0.7f, 0.7f);
+		cb.moveTo(doc.leftMargin(), doc.bottom()); // ll
+		cb.lineTo(doc.leftMargin(), doc.top()); // ul
+		cb.lineTo(doc.right(), doc.top()); // ur
+		cb.lineTo(doc.right(), doc.bottom()); // lr
+		cb.closePath();
+		cb.stroke();
+	}
 	
-	private void draw(TextBlock block, PdfWriter w) throws DocumentException {
-		block.draw(w);
+	private void draw(TextBlock block, PdfWriter w, Document d) throws DocumentException {
+		if (!block.draw(w, d)) {
+			drawMargins(d, w);
+			d.newPage();
+			block.redraw(w, d);
+		}
+		drawMargins(d, w);
 		System.out.println("#lines: " + block.getLinesWritten());
 		System.out.println("#real height: " + block.getRealHeight());
 		System.out.println("#real width: " + block.getRealWidth());		
