@@ -19,6 +19,7 @@ public class TextBlock {
 	private float c_llx;
 	private float c_lly;
 	private float c_width;
+	private float c_maxWidth;
 	private float c_height;
 	private float c_borderSize;
 	private float c_borderColor;
@@ -62,20 +63,32 @@ public class TextBlock {
 		c_columnText.setLeading(c_font.getSize() * 1.5f);
 		c_linesWritten = 0;
 		c_realWidth = 0;
-		c_realHeight = 0;
-		if (getGrowType() == GrowDirection.HORIZ
-				|| getGrowType() == GrowDirection.BOTH) {
+		if (isCanGrowX()) {
 			// in case of horizontal auto-width, adjust the width to contain the
 			// largest text line
-			float maxWidth = getMaxWidth();
-			if (c_width < maxWidth)
-				c_width = maxWidth;
+			if (getMaxWidth() <= 0) {
+				//max width not specified --> max width = document width
+				c_maxWidth = d.getPageSize().getWidth() - d.leftMargin() - d.rightMargin();
+			}
+//			float maxWidth = getTextMaxWidth();
+//			if (c_width < maxWidth)
+//				c_width = maxWidth;
 		}
 		return drawText(c_columnText, d, c_llx, c_lly, c_height);
 	}
 
 	public boolean redraw(PdfWriter w, Document d) throws DocumentException {
-		return drawText(c_columnText, d, c_llx, d.top()  - c_columnText.getLeading(), c_columnText.getLeading());		
+		if (!isCanGrowY()) {
+			//cannot grow vertically: space for only the remaining height
+			float heightLeft = getHeight() - getRealHeight();
+			if (heightLeft > 0) {
+				drawText(c_columnText, d, c_llx, d.top()  - heightLeft, heightLeft);					
+			}
+			return true;
+		}
+		else {
+			return drawText(c_columnText, d, c_llx, d.top()  - c_columnText.getLeading(), c_columnText.getLeading());					
+		}
 	}
 	
 	private float getPhraseWidth(Phrase p) {
@@ -107,7 +120,7 @@ public class TextBlock {
 		return maxWidth;
 	}
 
-	private float getMaxWidth() {
+	private float getTextMaxWidth() {
 		float maxWidth = 0;
 		for (Element e : c_elems) {
 			float w = 0;
@@ -122,19 +135,50 @@ public class TextBlock {
 	}
 
 	
+	public boolean isCanGrowX() {
+		return (getGrowType() == GrowDirection.HORIZ
+				|| getGrowType() == GrowDirection.BOTH);
+	}
 	
-	private boolean drawText(ColumnText c, Document d, float x1, float y1, float height) throws DocumentException {
+	public boolean isCanGrowY() {
+		return (getGrowType() == GrowDirection.VERT
+				|| getGrowType() == GrowDirection.BOTH);
+	}
+	
+	private float c_realLower;
+	private float c_realUpper;
+	
+	/**
+	 * Draw the buffered text on the pdf writer, using the columnText object passed as the first argument.
+	 * @param c ColumnText object used to write the text
+	 * @param d PDF Document on which the text is written
+	 * @param xStart left position of the ColumnText rectangle
+	 * @param yStart lower position of the ColumnText rectangle
+	 * @param height initial height of the ColumnText rectangle; if the text doesn't fit the ColumnText rectangle, 
+	 * depending on the {@link #getGrowType() growType} property, the rectangle size can be vertically increased
+	 * to enclose all the text.
+	 * @return true if the drawing has finished, false if some text remains to be drawn on the next page; note that
+	 * it returns true also if the text hasn't completely written but all the available height has been used.   
+	 * @throws DocumentException
+	 */
+	private boolean drawText(ColumnText c, Document d, float xStart, float yStart, float height) throws DocumentException {
 		boolean endText = true;
-		float x2 = x1 + c_width; // upper-right x
-		float y2 = y1 + height; // upper-right y
+		c_realHeight = 0;
+		float xLeft = xStart + getBorderSize() + getPadding();
+		float xRight = xStart - getPadding() - getBorderSize(); // right x
+		xRight += (isCanGrowX() ? getMaxWidth() : getWidth());
+		float yLower = yStart + getPadding() + getBorderSize(); // lower y
+		float yUpper = yStart + height - getPadding() - getBorderSize(); // upper y
+		c_realUpper = yStart + height;
 		int status = ColumnText.START_COLUMN;
 		while (ColumnText.hasMoreText(status)) {
-			c.setSimpleColumn(x1, y1, x2, y2);
+			c_realLower = yLower;
+			c.setSimpleColumn(xLeft, yLower, xRight, yUpper);
 			c.setUseAscender(true);
 			status = c.go();
 			c_linesWritten += c.getLinesWritten();
-			c_realWidth = Math.max(c_realWidth, c.getFilledWidth());
-			c_realHeight += c.getLinesWritten() * c.getLeading(); 
+			c_realWidth = Math.max(c_realWidth, c.getFilledWidth() + getPadding()*2 + getBorderSize()*2);
+			c_realHeight += c.getLinesWritten() * c.getLeading();  
 			float fw = c.getFilledWidth();
 			if (fw > c_width)
 				System.out
@@ -145,30 +189,38 @@ public class TextBlock {
 				break;
 			} else if ((getGrowType() == GrowDirection.VERT || getGrowType() == GrowDirection.BOTH)
 					&& ColumnText.hasMoreText(status)) {
-				// need to extend vertically: adjust "y" of lower left and upper
-				// right points
+				// need to extend vertically: adjust "y" of lower/upper points
 				// dist=space to skip after last written line
 				float dist = c.getLinesWritten() * c.getLeading() - height;
-				y1 -= height + dist;
-				if (y1 < 0)
-					y1 = 0;
-				y2 -= height + dist;
-				if (y2 < 0)
-					y2 = 0;
+				yLower -= height + dist;
+				if (yLower < 0)
+					yLower = 0;
+				yUpper -= height + dist;
+				if (yUpper < 0)
+					yUpper = 0;
 			}
-			if (y2 < d.bottomMargin()) {
+			if (yUpper < d.bottomMargin()) {
 				endText = false;
 				break;
 			}
-			if (y1 < d.bottomMargin()) {
-				y1 = d.bottomMargin();
+			if (yLower < d.bottomMargin()) {
+				yLower = d.bottomMargin();
+			}
+			if (yUpper - yLower < c.getLeading()) {
+				//non ci sta nemmeno una riga
+				endText = false;
+				break;
 			}
 		}
-		y1 = c.getYLine() - c_padding + c.getDescender();
-		y2 = y1 + height + c_padding;
-		c_realHeight = y2 - y1;
+		
+		//c.getDescender is negative: add the correct distance from the baseline of the last written row
+		yLower = c.getYLine() - c_padding + c.getDescender();
+		c_realLower = yLower;
+//		yUpper = yLower + height + c_padding;
+//		c_realUpper = yLower;
 
-		drawBorder(c, x1, y1, y2);
+		drawBorder(c, xStart, c_realLower, c_realUpper);
+		c_realHeight = c_realUpper - c_realLower;
 		return endText;
 	}
 
@@ -178,31 +230,35 @@ public class TextBlock {
 	private void drawBorder(ColumnText c, float x1, float y1, float y2) {
 		PdfContentByte cb = c.getCanvas();
 		if (c_borderSize > 0) {
-			x1 -= c_padding;
-			float x2 = x1 + c_width + c_padding * 2;
+			float halfBorder = c_borderSize / 2;
+			//x1 -= c_padding;
+			float x2 = x1 + c_realWidth;
 			cb.setLineWidth(c_borderSize);
 			cb.setRGBColorStrokeF(0.3f, 0.17f, 0.5f);
-			c.getCanvas().moveTo(x1, y1); // ll
-			c.getCanvas().lineTo(x1, y2); // ul
-			c.getCanvas().lineTo(x2, y2); // ur
-			c.getCanvas().lineTo(x2, y1); // lr
-			c.getCanvas().closePath();
+			c.getCanvas().moveTo(x1 + halfBorder, y1); 
+			c.getCanvas().lineTo(x1 + halfBorder, y2); // vertical left side
+			c.getCanvas().moveTo(x1, y2 - halfBorder); 
+			c.getCanvas().lineTo(x2, y2 - halfBorder); // horizontal top side
+			c.getCanvas().moveTo(x2 - halfBorder, y2); 
+			c.getCanvas().lineTo(x2 - halfBorder, y1); // vertical right side
+			c.getCanvas().moveTo(x2, y1 + halfBorder); 
+			c.getCanvas().lineTo(x1, y1 + halfBorder); // horizontal bottom side
 			c.getCanvas().stroke();
 			c_realHeight += c_borderSize * 2;
 		}		
 	}
 	
-	private float getLastlineExtraspace(ColumnText c) {
-		if (c.getCompositeElements().size() > 0) {
-			Element e = c.getCompositeElements().get(
-					c.getCompositeElements().size() - 1);
-			if (e instanceof Phrase) {
-				return ((Phrase) e).getLeading()
-						- ((Phrase) e).getFont().getSize();
-			}
-		}
-		return c.getLeading() - c_font.getSize();
-	}
+//	private float getLastlineExtraspace(ColumnText c) {
+//		if (c.getCompositeElements().size() > 0) {
+//			Element e = c.getCompositeElements().get(
+//					c.getCompositeElements().size() - 1);
+//			if (e instanceof Phrase) {
+//				return ((Phrase) e).getLeading()
+//						- ((Phrase) e).getFont().getSize();
+//			}
+//		}
+//		return c.getLeading() - c_font.getSize();
+//	}
 
 	/**
 	 * Return the lines written in the box so far. 
@@ -290,6 +346,22 @@ public class TextBlock {
 
 	public void setFont(Font font) {
 		c_font = font;
+	}
+
+	public float getRealLower() {
+		return c_realLower;
+	}
+
+	public float getRealUpper() {
+		return c_realUpper;
+	}
+
+	public float getMaxWidth() {
+		return c_maxWidth;
+	}
+
+	public void setMaxWidth(float maxWidth) {
+		c_maxWidth = maxWidth;
 	}
 
 }

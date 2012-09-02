@@ -1,7 +1,6 @@
 package prove;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
+import java.io.IOException;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -10,43 +9,17 @@ import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Chunk;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
-import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
 import com.itextpdf.text.Font.FontFamily;
-import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Paragraph;
 import com.itextpdf.text.Phrase;
-import com.itextpdf.text.pdf.ColumnText;
 import com.itextpdf.text.pdf.PdfContentByte;
-import com.itextpdf.text.pdf.PdfPCell;
-import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 
 import elements.TextBlock;
 import elements.TextBlock.GrowDirection;
 
-public class Tests {
-	private PdfData createPdfDocument(String baseName)
-			throws DocumentException, FileNotFoundException {
-		Document doc = new Document(PageSize.A4, 30, 30, 30, 30);
-		FileOutputStream fos = new FileOutputStream("c:/temp/pdf/" + baseName
-				+ ".pdf");
-		PdfWriter w = PdfWriter.getInstance(doc, fos);
-		doc.open();
-
-		return new PdfData(doc, w);
-	}
-
-	private class PdfData {
-		Document document;
-		PdfWriter writer;
-
-		PdfData(Document d, PdfWriter w) {
-			document = d;
-			writer = w;
-		}
-	}
-
+public class Tests extends CommonTest {
 	@Test
 	public void testPhrases() {
 		try {
@@ -214,42 +187,23 @@ public class Tests {
 			//drawGridX(doc, pdf.writer, block.getLly() + block.getHeight(), 20);
 			doc.close();
 		} catch (Exception e) {
+			e.printStackTrace();
 			Assert.fail(e.toString());
 		}
 	}
 	
-	private void drawGridX(Document doc, PdfWriter w, float startTop, float step) {
-		PdfContentByte cb = w.getDirectContentUnder();
-		cb.setLineWidth(0.1f);
-		cb.setRGBColorStrokeF(0.7f, 0.7f, 0.7f);
-		float y = startTop;
-		while (y > 0) {
-			cb.moveTo(doc.leftMargin(), y); // ll
-			cb.lineTo(doc.right() - doc.rightMargin(), y); // ul
-			cb.stroke();
-			y -= step;
-		}
-	}
-
-	private void drawMargins(Document doc, PdfWriter w) {
-		PdfContentByte cb = w.getDirectContentUnder();
-		cb.setLineWidth(0.4f);
-		cb.setRGBColorStrokeF(0.7f, 0.7f, 0.7f);
-		cb.moveTo(doc.leftMargin(), doc.bottom()); // ll
-		cb.lineTo(doc.leftMargin(), doc.top()); // ul
-		cb.lineTo(doc.right(), doc.top()); // ur
-		cb.lineTo(doc.right(), doc.bottom()); // lr
-		cb.closePath();
-		cb.stroke();
-	}
-	
-	private void draw(TextBlock block, PdfWriter w, Document d) throws DocumentException {
+	private void draw(TextBlock block, PdfWriter w, Document d) throws DocumentException, IOException {
 		if (!block.draw(w, d)) {
 			drawMargins(d, w);
+			drawVertSize(w, block);
+			drawHorzSize(w, block);
+			drawPaddings(w, block);
 			d.newPage();
 			block.redraw(w, d);
 		}
 		drawMargins(d, w);
+		drawVertSize(w, block);
+		drawHorzSize(w, block);
 		System.out.println("#lines: " + block.getLinesWritten());
 		System.out.println("#real height: " + block.getRealHeight());
 		System.out.println("#real width: " + block.getRealWidth());		
