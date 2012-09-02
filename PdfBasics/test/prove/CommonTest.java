@@ -42,7 +42,7 @@ public class CommonTest {
 		// posX,posY=bottom position
 		float posX = block.getLlx() + block.getRealWidth() + 4;
 		float posY = block.getRealLower();
-		float height = block.getRealHeight();
+		float height = block.getLastHeight();
 
 		PdfContentByte cb = w.getDirectContentUnder();
 		try {

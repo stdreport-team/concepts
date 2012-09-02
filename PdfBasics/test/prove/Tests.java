@@ -193,19 +193,19 @@ public class Tests extends CommonTest {
 	}
 	
 	private void draw(TextBlock block, PdfWriter w, Document d) throws DocumentException, IOException {
-		if (!block.draw(w, d)) {
+		if (!block.write(w, d)) {
 			drawMargins(d, w);
 			drawVertSize(w, block);
 			drawHorzSize(w, block);
 			drawPaddings(w, block);
 			d.newPage();
-			block.redraw(w, d);
+			block.write(w, d);
 		}
 		drawMargins(d, w);
 		drawVertSize(w, block);
 		drawHorzSize(w, block);
 		System.out.println("#lines: " + block.getLinesWritten());
-		System.out.println("#real height: " + block.getRealHeight());
+		System.out.println("#real height: " + block.getLastHeight());
 		System.out.println("#real width: " + block.getRealWidth());		
 	}
 
