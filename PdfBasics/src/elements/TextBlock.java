@@ -30,6 +30,8 @@ public class TextBlock {
 	private ColumnText			c_columnText;
 	private transient int		c_linesWritten;
 	private transient float	c_lastHeight;
+	/** total height (padding and border included) in points of the text written so far.
+	 * If the text spawns across multiple pages, this height is the sum of all pieces of text. */
 	private transient float	c_totalHeight;
 	private transient float	c_realWidth;
 
@@ -97,7 +99,16 @@ public class TextBlock {
 				// c_width = maxWidth;
 			}
 			c_drawing = true;
-			c_drawComplete = drawText(c_columnText, d, c_llx, c_lly, c_height);
+			
+			
+			float xLeft = c_llx + getBorderSize() + getPadding();
+			float yLower = c_lly + getPadding() + getBorderSize(); 
+			float height = c_height - (getPadding() + getBorderSize())*2; 
+			c_drawComplete = drawText(c_columnText, d, xLeft, yLower, height);
+			c_realLower -= (getPadding() + getBorderSize());
+  		drawBorder(c_columnText, c_llx, c_realLower, c_realUpper);
+  		c_lastHeight = c_realUpper - c_realLower;
+		  c_totalHeight += c_lastHeight;			
 		}
 		else {
 			c_drawComplete = redraw(w, d);			
@@ -105,22 +116,6 @@ public class TextBlock {
 		return c_drawComplete;
 	}
 
-	/**
-	 * Create the columnText object and initialize its properties
-	 * @param w writer to use
-	 */
-	private void createColumntext(PdfWriter w) {
-		PdfContentByte cb = w.getDirectContent();
-		c_columnText = new ColumnText(cb);
-		for (int i = 0; i < c_elems.size(); i++) {
-			Element e = c_elems.get(i);
-			if (e instanceof Phrase)
-				((Phrase) e).setFont(c_font);
-			c_columnText.addElement(e);
-		}
-		c_columnText.setLeading(c_font.getSize() * 1.5f);		
-	}
-	
 	/**
 	 * Used internally to write the text on pages after the first.
 	 * @param w writer to use
@@ -138,16 +133,43 @@ public class TextBlock {
 			return true;
 		} else {
 			//write a line of text at a time, until all the text has been written
-			float yStart = d.top() - c_columnText.getLeading();
-			boolean bDrawFinished = false;
-			while (yStart > d.bottomMargin() && !bDrawFinished) {
-				bDrawFinished = drawText(c_columnText, d, c_llx,	yStart, c_columnText.getLeading());
+			float yStart = d.top() - getPadding() - getBorderSize();
+			c_columnText.setUseAscender(true);
+			int status = ColumnText.START_COLUMN;
+			float xLeft = c_llx + getBorderSize() + getPadding();
+			boolean bDrawFinished = false;		
+			while (!bDrawFinished) {
+				if (yStart - c_columnText.getLeading() < d.bottom())
+					//no space left even for a single row
+					break;
 				yStart -= c_columnText.getLeading();
+				bDrawFinished = drawText(c_columnText, d, xLeft,	yStart, c_columnText.getLeading());
 			}
-			return bDrawFinished;
+			c_realLower -= (getPadding() + getBorderSize());
+  		drawBorder(c_columnText, c_llx, c_realLower, c_realUpper);
+  		c_lastHeight = c_realUpper - c_realLower;
+		  c_totalHeight += c_lastHeight;			
+			return bDrawFinished;			
 		}
 	}
 
+	
+	/**
+	 * Create the columnText object and initialize its properties
+	 * @param w writer to use
+	 */
+	private void createColumntext(PdfWriter w) {
+		PdfContentByte cb = w.getDirectContent();
+		c_columnText = new ColumnText(cb);
+		for (int i = 0; i < c_elems.size(); i++) {
+			Element e = c_elems.get(i);
+			if (e instanceof Phrase)
+				((Phrase) e).setFont(c_font);
+			c_columnText.addElement(e);
+		}
+		c_columnText.setLeading(c_font.getSize() * 1.5f);		
+	}
+	
 	private float getPhraseWidth(Phrase p) {
 		return getStringWidth(p.getContent(), p.getFont());
 	}
@@ -205,6 +227,8 @@ public class TextBlock {
 	/**
 	 * Draw the buffered text on the pdf writer, using the columnText object
 	 * passed as the first argument.
+	 * NOTE: the arguments regarding position and size refers exactly to the text rectangle,
+	 * that is <b>doesn't include</b> padding and borders.
 	 * 
 	 * @param c
 	 *          ColumnText object used to write the text
@@ -227,31 +251,49 @@ public class TextBlock {
 	 */
 	private boolean drawText(ColumnText c, Document d, float xStart,
 			float yStart, float height) throws DocumentException {
+		
+		//FIXME controllare che esista l'altezza minima disponibile per scrivere almeno una riga 
+		
 		boolean endText = true;
 		c_lastHeight = 0;
-		float xLeft = xStart + getBorderSize() + getPadding();
-		float xRight = xStart - getPadding() - getBorderSize(); // right x
-		xRight += (isCanGrowX() ? getMaxWidth() : getWidth());
-		float yLower = yStart + getPadding() + getBorderSize(); // lower y
-		float yUpper = yStart + height - getPadding() - getBorderSize(); // upper y
-		c_realUpper = yStart + height;
+
+		//prepare the right X point
+		float xRight = xStart;
+		float mw = getMaxWidth() > 0 ? getMaxWidth() : d.getPageSize().getWidth();
+		xRight += (isCanGrowX() ? mw : getWidth());
+		if (xRight > d.right())
+			xRight = d.right();
+		xRight -= (getPadding() + getBorderSize())*2;
+					
+		float yLower = yStart; 
+		
+		float remainingHeight = 0;
+		if (getMaxHeight() > 0)
+			//FIXME qui forse bisogna sottrarre padding e border
+			remainingHeight = getMaxHeight() - c_totalHeight;
+		else
+			remainingHeight = height;
+		
+		float yUpper = yStart + remainingHeight;
+		//c_realUpper include border and padding
+		c_realUpper = yUpper + getPadding() + getBorderSize();
 		
 		//FIXME need to save columntext status across drawText calls to safely stop writing text
 		int status = ColumnText.START_COLUMN;
 		while (ColumnText.hasMoreText(status)) {
-			c_realLower = yLower;
-			c.setSimpleColumn(xLeft, yLower, xRight, yUpper);
+			c_realLower = yLower - getPadding() - getBorderSize();
+			c.setSimpleColumn(xStart, yLower, xRight, yUpper);
 			c.setUseAscender(true);
 			status = c.go();
 			c_linesWritten += c.getLinesWritten();
 			c_realWidth = Math.max(c_realWidth, c.getFilledWidth() + getPadding() * 2
 					+ getBorderSize() * 2);
 			c_lastHeight += c.getLinesWritten() * c.getLeading();
-			float fw = c.getFilledWidth();
-			if (fw > c_width)
-				System.out
-						.println("WARNING: some text can be cutted out from the text block ("
-								+ (fw - c_width) + "pt cutted)");
+//			float fw = c.getFilledWidth();
+//			if (fw > c_width)
+//				System.out
+//						.println("WARNING: some text can be cutted out from the text block ("
+//								+ (fw - c_width) + "pt cutted)");
 
 			if (getGrowType() == GrowDirection.NONE) {
 				break;
@@ -283,14 +325,14 @@ public class TextBlock {
 
 		// c.getDescender is negative: add the correct distance from the baseline of
 		// the last written row
-		yLower = c.getYLine() - c_padding + c.getDescender();
+		yLower = c.getYLine() + c.getDescender();
 		c_realLower = yLower;
 		// yUpper = yLower + height + c_padding;
 		// c_realUpper = yLower;
 
-		drawBorder(c, xStart, c_realLower, c_realUpper);
-		c_lastHeight = c_realUpper - c_realLower;
-		c_totalHeight += c_lastHeight;
+//		drawBorder(c, xStart, c_realLower, c_realUpper);
+//		c_lastHeight = c_realUpper - c_realLower;
+//		c_totalHeight += c_lastHeight;
 		return endText;
 	}
 
@@ -449,8 +491,7 @@ public class TextBlock {
 
 	/**
 	 * Returns the height of the whole text block rendered so far. If the text
-	 * spawns across multiple pages, this property return the sum of every parts
-	 * height.
+	 * spawns across multiple pages, this property return the sum of all text parts.
 	 * <p/>
 	 * Note that this property is meaningful only after the
 	 * {@link #draw(PdfWriter, Document) draw} method has been called.
