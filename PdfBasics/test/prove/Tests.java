@@ -16,8 +16,10 @@ import com.itextpdf.text.Phrase;
 import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfWriter;
 
+import elements.BlockElement.GrowDirection;
+import elements.Border;
+import elements.DrawContext;
 import elements.TextBlock;
-import elements.TextBlock.GrowDirection;
 
 public class Tests extends CommonTest {
 	@Test
@@ -79,109 +81,95 @@ public class Tests extends CommonTest {
 		try {
 			Font times20 = new Font(FontFamily.TIMES_ROMAN, 20);
 			Font helv18 = new Font(FontFamily.HELVETICA, 18);
-			Font helv11 = new Font(FontFamily.HELVETICA, 11);
-			helv11.setColor(BaseColor.BLUE);
 			
 			PdfData pdf = createPdfDocument("provaColumntext");
 			Document doc = pdf.document;
 			
-			TextBlock col2 = new TextBlock(doc.left(30), doc.top(30) - 200, 200, 150);
-			col2.setBorderSize(0.8f);
-			col2.setFont(helv18);
-			col2.setPadding(2);
-			col2.setGrowType(GrowDirection.BOTH);
-			col2.addElement(new Phrase(
-					"Tanto va la gatta al lardo\n che ci lascia lo zampino."));
-			col2.addElement(new Phrase("L'ultimo che esce chiude la porta"));
-			col2.addElement(new Phrase(
-					"Meglio un uovo oggi che una gallina domani."));
-			col2.addElement(new Phrase("Chi trova un amico trova un tesoro."));
-			Phrase p = new Phrase("Chi va con lo zoppo");
-			Chunk c = new Chunk(" impara a zoppicare.", helv11);
-			c.setHorizontalScaling(3.5f);
-			p.add(c);
-			col2.addElement(p);
-			col2.addElement(new Phrase("A caval donato non si guarda in bocca."));
-			col2.addElement(new Phrase(
-					"Chi è causa del suo mal, pianga se stesso."));
-			col2.addElement(new Phrase(
-					"Il mondo è fatto a scale, c'è chi scende e c'è chi sale."));
-			draw(col2, pdf.writer, doc);
+			TextBlock tb = new TextBlock(doc.left(10), doc.top(10), 200, 150);
+			tb.setBorder(new Border(0.8f, new BaseColor(120, 89, 78)));
+			tb.setFont(helv18);
+			tb.setPadding(2);
+			tb.setGrowType(GrowDirection.BOTH);
+			setText(tb);			
+			draw(tb, pdf.writer, doc);
 			
-			drawGridX(doc, pdf.writer, col2.getLly() + col2.getHeight(), 20);
 
-			col2.setLly(doc.top(30) - 480);			
-			col2.setFont(times20);
-			draw(col2, pdf.writer, doc);
+			tb.setStartY(tb.getStartY() - tb.getLastHeight() - 30);		
+			tb.setStartX(tb.getStartX() + 10);
+			tb.setFont(times20);
+			tb.setPadding(10);
+			draw(tb, pdf.writer, doc);
+
+			tb.setStartY(tb.getStartY() - tb.getLastHeight() - 30);		
+			tb.setStartX(tb.getStartX() + 10);
+			tb.setFont(new Font(FontFamily.TIMES_ROMAN, 14));
+			tb.setPaddingRight(2);
+			tb.setPaddingTop(1);
+			setText2(tb);
+			draw(tb, pdf.writer, doc);
 			
 			doc.newPage();
 			
-			col2.setGrowType(GrowDirection.NONE);
-			col2.setLly(doc.top(30) - 400);
-
-			draw(col2, pdf.writer, doc);
-//			
-//			
-//			TextBlock tb = new TextBlock(doc.left(30), doc.top(30) - 200, 200, 150);
-//			tb.setBorderSize(0.8f);
-//			tb.setFont(helv18);
-//			tb.setPadding(2);
-//			tb.setGrowType(GrowDirection.BOTH);
-//			tb.addElement(new Phrase(
-//					"Tanto va la gatta al lardo\n che ci lascia lo zampino."));
-//			tb.addElement(new Chunk("Chunk+Chunk.", helv11));
-//			tb.addElement(new Phrase("L'ultimo che esce chiude la porta"));
-//			tb.addElement(new Phrase(
-//					"Meglio un uovo oggi che una gallina domani."));
-//			tb.addElement(new Phrase("Chi trova un amico trova un tesoro."));
-//			tb.addElement(new Phrase(
-//					"Chi va con lo zoppo impara a zoppicare."));
-//			tb.addElement(new Phrase("A caval donato non si guarda in bocca."));
-//			tb.addElement(new Chunk("Chunk+Chunk.", helv11));
-//			tb.addElement(new Phrase(
-//					"Chi è causa del suo mal, pianga se stesso."));
-//			tb.addElement(new Phrase(
-//					"Il mondo è fatto a scale, c'è chi scende e c'è chi sale."));
-//			draw(tb, pdf.writer);
-						
+			tb.setWidth(100);
+			tb.setGrowType(GrowDirection.NONE);
+			tb.setStartY(doc.top(20));
+			draw(tb, pdf.writer, doc);
+			
+			
+			drawGridX(doc, pdf.writer, tb.getStartY() + tb.getHeight(), 20);			
 			doc.close();
 		} catch (Exception e) {
+			e.printStackTrace();
 			Assert.fail(e.toString());
 		}
 	}
 
+	private void setText(TextBlock block) {
+		block.clearContent();
+		Font helv11 = new Font(FontFamily.HELVETICA, 11);
+		helv11.setColor(BaseColor.BLUE);
+
+		Font helv12 = new Font(FontFamily.HELVETICA, 12);
+		helv12.setColor(BaseColor.CYAN);
+		
+		block.addElement(new Phrase("Tanto va la gatta al lardo\n che ci lascia lo zampino."));
+		block.addElement(new Phrase("L'ultimo che esce chiude la porta"));
+		block.addElement(new Phrase("Meglio un uovo oggi che una gallina domani."));
+		block.addElement(new Phrase("Chi trova un amico trova un tesoro."));
+		Phrase p = new Phrase("Chi va con lo zoppo");
+		Chunk c = new Chunk(" impara a zoppicare.", helv11);
+		c.setHorizontalScaling(1.5f);
+		p.add(c);
+		block.addElement(p);
+		block.addElement(new Phrase("A caval donato non si guarda in bocca.", helv12));
+		block.addElement(new Phrase("Chi è causa del suo mal, pianga se stesso."));
+
+		Font cou12 = new Font(FontFamily.COURIER, 10, Font.BOLD);
+		cou12.setColor(BaseColor.MAGENTA);
+		block.addElement(new Phrase("Il mondo è fatto a scale, c'è chi scende e c'è chi sale.", cou12));		
+	}
+	
+	private void setText2(TextBlock block) {
+		block.clearContent();
+		block.addElement(new Phrase("Tanto va la gatta al lardo\n che ci lascia lo zampino."));
+		block.addElement(new Phrase("L'ultimo che esce chiude la porta"));
+		block.addElement(new Phrase("Meglio un uovo oggi che una gallina domani."));
+	}
+	
 	@Test
 	public void testColumnTextOnTwoPages() {
 		try {
-			Font times20 = new Font(FontFamily.TIMES_ROMAN, 20);
 			Font helv18 = new Font(FontFamily.HELVETICA, 18);
-			Font helv11 = new Font(FontFamily.HELVETICA, 11);
-			helv11.setColor(BaseColor.BLUE);
 			
 			PdfData pdf = createPdfDocument("provaColumntextPages");
 			Document doc = pdf.document;
 			
 			TextBlock block = new TextBlock(doc.left(30), doc.bottomMargin() + 50, 200, 100);
-			block.setBorderSize(0.8f);
+			block.setBorder(new Border(0.8f, new BaseColor(120, 89, 78)));
 			block.setFont(helv18);
 			block.setPadding(2);
 			block.setGrowType(GrowDirection.BOTH);
-			block.addElement(new Phrase(
-					"Tanto va la gatta al lardo\n che ci lascia lo zampino."));
-			block.addElement(new Phrase("L'ultimo che esce chiude la porta"));
-			block.addElement(new Phrase(
-					"Meglio un uovo oggi che una gallina domani."));
-			block.addElement(new Phrase("Chi trova un amico trova un tesoro."));
-			Phrase p = new Phrase("Chi va con lo zoppo");
-			Chunk c = new Chunk(" impara a zoppicare.", helv11);
-			c.setHorizontalScaling(3.5f);
-			p.add(c);
-			block.addElement(p);
-			block.addElement(new Phrase("A caval donato non si guarda in bocca."));
-			block.addElement(new Phrase(
-					"Chi è causa del suo mal, pianga se stesso."));
-			block.addElement(new Phrase(
-					"Il mondo è fatto a scale, c'è chi scende e c'è chi sale."));
+			setText(block);
 			draw(block, pdf.writer, doc);
 			
 			//drawGridX(doc, pdf.writer, block.getLly() + block.getHeight(), 20);
@@ -193,17 +181,19 @@ public class Tests extends CommonTest {
 	}
 	
 	private void draw(TextBlock block, PdfWriter w, Document d) throws DocumentException, IOException {
-		if (!block.write(w, d)) {
-			drawMargins(d, w);
+		DrawContext dc = new DrawContext(w, d);
+		block.resetDrawStatus();
+		while (!block.draw(dc)) {
+			drawPageMargins(d, w);
 			drawVertSize(w, block);
 			drawHorzSize(w, block);
 			drawPaddings(w, block);
 			d.newPage();
-			block.write(w, d);
 		}
-		drawMargins(d, w);
+		drawPageMargins(d, w);
 		drawVertSize(w, block);
 		drawHorzSize(w, block);
+		drawPaddings(w, block);
 		System.out.println("#lines: " + block.getLinesWritten());
 		System.out.println("#real height: " + block.getLastHeight());
 		System.out.println("#real width: " + block.getRealWidth());		

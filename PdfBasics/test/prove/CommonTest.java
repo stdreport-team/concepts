@@ -40,7 +40,7 @@ public class CommonTest {
 	protected void drawVertSize(PdfWriter w, TextBlock block)
 			throws DocumentException, IOException {
 		// posX,posY=bottom position
-		float posX = block.getLlx() + block.getRealWidth() + 4;
+		float posX = block.getStartX() + block.getRealWidth() + 4;
 		float posY = block.getRealLower();
 		float height = block.getLastHeight();
 
@@ -50,7 +50,7 @@ public class CommonTest {
 			cb.setLineWidth(0.5f);
 			// float[] dash1 = { 1 };
 			// cb.setLineDash(dash1, 1);
-			cb.setRGBColorStrokeF(0.8f, 0.8f, 0.8f);
+			cb.setRGBColorStrokeF(0.9f, 0.8f, 0.8f);
 			// cb.setLineDash(0.2f);
 			cb.moveTo(posX, posY); // bottom
 			cb.lineTo(posX, posY + height); // top
@@ -75,7 +75,7 @@ public class CommonTest {
 	protected void drawHorzSize(PdfWriter w, TextBlock block)
 			throws DocumentException, IOException {
 		// posX,posY=left position
-		float posX = block.getLlx();
+		float posX = block.getStartX();
 		float posY = block.getRealLower() - 4;
 		float width = block.getRealWidth();
 
@@ -109,38 +109,75 @@ public class CommonTest {
 
 	protected void drawPaddings(PdfWriter w, TextBlock block)
 			throws DocumentException, IOException {
+		drawPaddingLeft(w, block);
+		drawPaddingRight(w, block);		
+	}
+	
+	protected void drawPaddingLeft(PdfWriter w, TextBlock block)
+			throws DocumentException, IOException {
 		
-		if (block.getPadding() == 0f)
+		if (block.getPaddingLeft() == 0f)
 			return;		
-		// posX,posY=left position
-		float posX = block.getLlx();
-		float posY = block.getRealLower() - 6;
-		float width = block.getRealWidth();
 
 		PdfContentByte cb = w.getDirectContent();
 		try {
+			// posX,posY=left position
+			float posX = block.getStartX();
+			float posY = block.getRealLower() - 6;
+			float paddingHeight = 36f;
 			cb.saveState();
 			float tl = 0.08f;
 			cb.setLineWidth(tl);
 			float[] dash1 = { 1 };
 			cb.setLineDash(dash1, 1);
-			cb.setRGBColorStrokeF(0f, 0f, 0f);
-			cb.moveTo(posX + block.getBorderSize() + tl, posY); 
-			cb.lineTo(posX + block.getBorderSize() + tl, posY + 12);  
-			cb.moveTo(posX + block.getBorderSize() + block.getPadding(), posY); 
-			cb.lineTo(posX + block.getBorderSize() + block.getPadding(), posY + 12);  //left padding
+			cb.setRGBColorStrokeF(0f, 0.5f, 0f);
+			//linea sinistra
+			float x1 = posX + block.getBorderLeftSize();  // + tl;
+			cb.moveTo(x1, posY); 
+			cb.lineTo(x1, posY + paddingHeight);  
+			//linea destra
+			float x2 = x1 + block.getPaddingLeft();
+			cb.moveTo(x2, posY); 
+			cb.lineTo(x2, posY + paddingHeight);  //left padding
 
-			cb.moveTo(posX + block.getRealWidth() - block.getBorderSize() - block.getPadding() - tl, posY); 
-			cb.lineTo(posX + block.getRealWidth() - block.getBorderSize() - block.getPadding() - tl, posY + 12);  
-			cb.moveTo(posX + block.getRealWidth() - block.getBorderSize(), posY); 
-			cb.lineTo(posX + block.getRealWidth() - block.getBorderSize(), posY + 12);  //right padding
-			
 			cb.stroke();
 		} finally {
 			cb.restoreState();
 		}
 	}
-	
+
+	protected void drawPaddingRight(PdfWriter w, TextBlock block)
+			throws DocumentException, IOException {
+		
+		if (block.getPaddingLeft() == 0f)
+			return;		
+
+		PdfContentByte cb = w.getDirectContentUnder();
+		try {
+			// posX,posY=left position
+			float posX = block.getStartX();
+			float posY = block.getRealLower() - 6;
+			float paddingHeight = 36f;
+			cb.saveState();
+			float tl = 0.08f;
+			cb.setLineWidth(tl);
+			float[] dash1 = { 1 };
+			cb.setLineDash(dash1, 1);
+			cb.setRGBColorStrokeF(0f, 0.5f, 0f);
+			//linea sinistra
+			float x1 = posX + block.getRealWidth() - block.getBorderLeftSize() - block.getPaddingRight();
+			cb.moveTo(x1, posY); 
+			cb.lineTo(x1, posY + paddingHeight);  
+			//linea destra
+			float x2 = x1 + block.getPaddingRight();
+			cb.moveTo(x2, posY); 
+			cb.lineTo(x2, posY + paddingHeight);  //left padding
+
+			cb.stroke();
+		} finally {
+			cb.restoreState();
+		}
+	}
 	
 	protected void drawGridX(Document doc, PdfWriter w, float startTop, float step) {
 		PdfContentByte cb = w.getDirectContentUnder();
@@ -155,14 +192,14 @@ public class CommonTest {
 		}
 	}
 
-	protected void drawMargins(Document doc, PdfWriter w) {
+	protected void drawPageMargins(Document doc, PdfWriter w) {
 		PdfContentByte cb = w.getDirectContentUnder();
 		try {
 			cb.saveState();
 			cb.setLineWidth(0.1f);
 			float[] dash1 = { 1 };
 			cb.setLineDash(dash1, 1);
-			cb.setRGBColorStrokeF(0.7f, 0.7f, 0.7f);
+			cb.setRGBColorStrokeF(0.7f, 0.7f, 1f);
 			cb.moveTo(doc.leftMargin(), doc.bottom()); // ll
 			cb.lineTo(doc.leftMargin(), doc.top()); // ul
 			cb.lineTo(doc.right(), doc.top()); // ur
